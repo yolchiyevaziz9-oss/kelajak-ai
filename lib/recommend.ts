@@ -5,7 +5,6 @@
 
 import { JOBS, type Job } from "./jobs";
 import { SKILLS } from "./skills";
-import { UNIVERSITIES } from "./universities";
 
 export type Profile = {
   hasHigherEducation: boolean;
@@ -102,11 +101,12 @@ function matchScore(profile: Profile, job: Job): { score: number; reasons: strin
   return { score: Math.max(0, Math.min(100, score)), reasons };
 }
 
-export function recommendJobs(profile: Profile, top = 6): Recommendation[] {
-  return JOBS.map((job) => {
-    const { score, reasons } = matchScore(profile, job);
-    return { job, score, reasons };
-  })
+export function recommendJobs(profile: Profile, top = 6, jobs: Job[] = JOBS): Recommendation[] {
+  return jobs
+    .map((job) => {
+      const { score, reasons } = matchScore(profile, job);
+      return { job, score, reasons };
+    })
     .sort((a, b) => b.score - a.score)
     .slice(0, top);
 }

@@ -14,6 +14,7 @@ import {
   type Recommendation,
   type AdviceBlock,
 } from "@/lib/recommend";
+import type { Job } from "@/lib/jobs";
 import {
   MapPin,
   Briefcase,
@@ -34,6 +35,7 @@ export default function NatijaPage() {
   const [analyzing, setAnalyzing] = useState(true);
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [advice, setAdvice] = useState<AdviceBlock[]>([]);
+  const [jobsCount, setJobsCount] = useState<{ total: number; real: number } | null>(null);
 
   useEffect(() => {
     const raw = typeof window !== "undefined" ? localStorage.getItem("kelajak_profile") : null;
@@ -41,13 +43,37 @@ export default function NatijaPage() {
     const p = JSON.parse(raw) as Profile & { name?: string };
     setProfile(p);
 
-    // AI "tahlil qilmoqda" effekti
-    const timer = setTimeout(() => {
-      setRecs(recommendJobs(p, 6));
+    let cancelled = false;
+    (async () => {
+      // Real ishlarni serverdan olamiz (HH.uz + curated)
+      const url = `/api/jobs${p.city ? `?city=${encodeURIComponent(p.city)}` : ""}`;
+      let jobs: Job[] | undefined;
+      let real = 0;
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        if (r.ok) {
+          const data = (await r.json()) as { jobs: Job[]; olxCount?: number; curatedCount?: number };
+          jobs = data.jobs;
+          real = data.olxCount ?? 0;
+        }
+      } catch (e) {
+        console.error("Failed to fetch /api/jobs", e);
+      }
+
+      // Minimal "AI tahlil qilmoqda" effekti
+      await new Promise((res) => setTimeout(res, 1400));
+      if (cancelled) return;
+
+      const recommendations = recommendJobs(p, 8, jobs);
+      setRecs(recommendations);
       setAdvice(generateAdvice(p));
+      setJobsCount({ total: jobs?.length ?? 0, real });
       setAnalyzing(false);
-    }, 1800);
-    return () => clearTimeout(timer);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!profile) {
@@ -86,6 +112,13 @@ export default function NatijaPage() {
               {t.results.title}
             </h1>
             <p className="mt-2 text-gray-400">{t.results.subtitle}</p>
+            {jobsCount && jobsCount.total > 0 && (
+              <p className="mt-3 text-xs text-accent-300/80">
+                {lang === "uz"
+                  ? `Bazada ${jobsCount.total} ish e'loni${jobsCount.real > 0 ? ` (${jobsCount.real} ta OLX.uz'dan)` : ""}`
+                  : `В базе ${jobsCount.total} вакансий${jobsCount.real > 0 ? ` (${jobsCount.real} с OLX.uz)` : ""}`}
+              </p>
+            )}
           </div>
 
           {/* Analyzing animation */}
@@ -245,13 +278,26 @@ function JobCard({ rec, t, rank }: { rec: Recommendation; t: any; rank: number }
       )}
 
       <div className="mt-5 flex items-center gap-2">
-        <a
-          href={job.contact.includes("@") ? `mailto:${job.contact}` : `#`}
-          className="btn-primary !px-4 !py-2 text-xs"
-        >
-          <Mail className="h-3.5 w-3.5" /> {t.results.apply}
-        </a>
-        <span className="text-xs text-gray-500 truncate">{job.contact}</span>
+        {job.url ? (
+          <a
+            href={job.url}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-primary !px-4 !py-2 text-xs"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> {t.results.apply}
+          </a>
+        ) : (
+          <a
+            href={job.contact.includes("@") ? `mailto:${job.contact}` : `#`}
+            className="btn-primary !px-4 !py-2 text-xs"
+          >
+            <Mail className="h-3.5 w-3.5" /> {t.results.apply}
+          </a>
+        )}
+        <span className="text-xs text-gray-500 truncate">
+          {job.url ? "HH.uz" : job.contact}
+        </span>
       </div>
     </div>
   );
