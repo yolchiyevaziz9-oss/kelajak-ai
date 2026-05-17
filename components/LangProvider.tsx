@@ -6,7 +6,7 @@ import { DICT, type Lang } from "@/lib/i18n";
 type Ctx = {
   lang: Lang;
   setLang: (l: Lang) => void;
-  t: (typeof DICT)["uz"];
+  t: (typeof DICT)[Lang];
 };
 
 const LangCtx = createContext<Ctx | null>(null);
